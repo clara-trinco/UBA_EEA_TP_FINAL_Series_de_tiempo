@@ -1,0 +1,518 @@
+---
+title: "EEA_TP_Final_Series-de-Tiempo_AntonioVelazquezBustamente_ClaraTrinco"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+
+---
+
+# Serie de Tiempo
+
+## ¿Que son?
+
+Una serie de tiempos, a diferencia de cualquier otro data set, tiene como característica  un campo con información temporal u orden. Muchas disciplinas, como finanzas, administración pública, energía, retail, salud, están dominadas por información de serie de tiempos. 
+
+Demos algunos ejemplos: 
+1) Cotizaciones de acciones. 
+2) El INDEC calculará el producto interno bruto del país sobre una base anual. 
+3) 2020, año COVID seguro han seguido y visto los casos semanales de infecciones. 
+4) Otro ejemplo es el calentamiento global en la era post industrial. 
+
+Podemos decir que una serie temporal o cronológica es una sucesión de datos medidos en determinados momentos y ordenados cronológicamente
+
+Algo importante en series temporales es la **autocorrelación**: Los valores de una serie temporal está correlacionada con valores anteriores. Si no existe ningún tipo de correlación, entonces fenómeno no puede ser modelado como una serie de tiempo.
+
+Hablemos ahora de sus características:
+
+* *Tendencia secular o regular*, indica la marcha general y persistente del fenómeno observado, es una componente de la serie que refleja la evolución a largo plazo. Por ejemplo, el uso creciente de Internet en la sociedad, independientemente de que en un mes concreto en un país, por determinadas causas, haya una baja en la utilización de Internet.
+
+* *Variación estacional o variación cíclica regular*, el movimiento periódico de corto plazo. Se trata de una componente causal debida a la influencia de ciertos fenómenos que se repiten de manera periódica en un año (las estaciones), una semana (los fines de semana) o un día (las horas puntas) o cualquier otro periodo. Recoge las oscilaciones que se producen en esos períodos de repetición. Por ejemplo, el tráfico en la autopista que reporta picos durante determinadas franjas horarias y días
+
+* *Variación cíclica*, el componente de la serie que recoge las oscilaciones periódicas de amplitud superior a un año. Suelen deberse a la alternancia de etapas de prosperidad económica (crestas) con etapas de depresión (valles).Por ejemplo, ciclos económicos, recesiones
+
+* *Variación aleatoria o ruido*, accidental, de carácter errático, también denominada residuo, no muestran ninguna regularidad (salvo las regularidades estadísticas), debidos a fenómenos de carácter ocasional. Por ejemplo tormentas, terremotos, inundaciones, huelgas, guerras, avances tecnológicos, etcétera.
+
+Usaremos en esta notebook la libreria astsa y sus datasets.
+
+```{r}
+library(astsa) #cargo libreria
+```
+
+Aquí tenemos la serie de ganancias trimestrales por acción de Johnson & Johnson. Tiene algunas características comunes de los datos de series de tiempo, tendencia al alza, estacionalidad en el sentido de que el segundo y tercer trimestres generalmente hacia arriba, mientras que el cuarto trimestre generalmente es hacia abajo. Además, existe heterocedasticidad porque, a medida que aumenta el valor del activo, los pequeños cambios porcentuales se convierten en grandes cambios absolutos.
+
+```{r}
+#cargamos la base jj
+data(jj)
+plot(jj, main = "Johnson & Johnson Quarterly Earnings per Share", type = "c")
+text(jj, labels = 1:4, col = 1:4)
+
+```
+
+
+La segunda serie son las desviaciones anuales de la temperatura global. Los datos son desviaciones de la temperatura promedio entre 1960 y 1980. Los datos tienen una tendencia generalmente positiva, pero la tendencia no siempre es positiva. A diferencia de los datos de Johnson y Johnson, esta serie no tiene un componente estacional y es homoscedástica.
+
+
+```{r}
+data("globtemp")
+plot(globtemp, main = "Global Temperature Deviations", type= "o")
+
+```
+
+La tercera serie son los rendimientos semanales del S&P 500 (índice bursátil estadounidense basado en 500 grandes corporaciones). Las devoluciones son el cambio porcentual por período de tiempo. A diferencia de las otras series, esta serie no tiene tendencia ni estacionalidad. De hecho, parece que no hay ningún patrón en la serie (excepto que de vez en cuando, la varianza es grande). Este es un ejemplo de un tipo particular de proceso llamado ruido.  
+
+```{r}
+data(xts)
+data("sp500w")
+plot(sp500w, main = "S&P 500 Weekly Returns")
+```
+
+
+## Descomponiendo series de tiempo
+
+Una serie de tiempo la podemos descomponer: tendencia, ciclo y estacionalidad. 
+Sacando esto del modelo, solo queda el residuo el cual, en un buen modelo, no debe tener correlación serial ya que el modelo debería haber capturado el patrón.
+A este ruido blanco gaussiano sin correlación serial se lo denomina comúnmente como Random Walk, siendo el valor previo de la serie más ruido blanco que es aleatorio.  
+
+```{r}
+
+descomposejj <- decompose(jj, type = c("additive", "multiplicative"), filter = NULL) #uso de descompose en r para descomponer jj 
+plot(descomposejj) #dibujamos la descomposicion
+
+```
+
+Para trabajar con series de tiempo necesitamos remover la tendencia y forzar los datos a ser estacionales a esto se lo denomina DIFERENCIACION. La diferenciación analiza la diferencia entre el valor de una serie de tiempo en un momento determinado y su valor anterior.
+
+Veamos a continuacion una tendencia y su diferenciaciòn.
+
+```{r}
+
+plot(jj)
+title("JJ trend stationary")
+
+jj_diff <- diff(jj)
+plot(jj_diff)
+title("JJ random walk")
+```
+# ARMA
+
+Cualquier serie de tiempo estacionaria se puede escribir como una combinación lineal de ruido blanco. El  modelo ARMA tiene esta forma, por lo que es una buena opción para modelar series de tiempo estacionarias.
+
+Los modelos **ARMA** son modelos de regresión de series de tiempo. Si recordamos, en la regresión tenemos una variable dependiente (Y), una variable independiente (X) y regresa linealmente Y sobre X. Una suposición crucial es que los errores son independientes, normales y homocedásticos. En otras palabras, los errores son ruido blanco. [WN] El ruido blanco es una secuencia de normales independientes con varianza común. Eventualmente verá que los modelos de series de tiempo se construyen alrededor del ruido blanco.
+
+### [AR]
+
+**[AR]** Con las series de tiempo, puede hacer una regresión de hoy a ayer, y esto se denomina regresión automática (o autoregresión).  O sea predecimos sobre el mismo valor del ciclo anterior. En este caso, lo que sucede hoy es la variable dependiente y lo que sucedió ayer es la variable independiente. 
+
+### [MA]
+
+**[MA]** Por lo general, los datos de las series de tiempo están correlacionados, y asumir que los errores no están correlacionados puede conducir a malos pronósticos. Una forma de superar el problema es utilizar una media móvil para los errores. MA realiza cálculos basados en el ruido en los datos junto con la pendiente de los datos Es también un suavizador de los valores en la medida en que el n se hace más grande. Esta media móvil también puede ser ponderada según el período para darle mayor fuerza a los valores más cercanos al tiempo presente.
+
+## Generacion de modelos ARMA
+
+Vamos a ir generando datos a partir de varios modelos ARMA. Generando 200 observaciones y graficando el resultado con el modelos **arima.sim** de r.
+
+```{r}
+# Generamos ruido blanco
+WN <- arima.sim(model=list(order = c(0,0,0)),n=200)
+plot(WN)
+```
+```{r}
+# Generamos modelo AR(2) con parametros 1.5 and -.75
+AR <- arima.sim(model=list(order = c(2,0,0), ar=c(1.5,-0.75)),n=200)
+plot(AR)
+```
+
+
+```{r}
+# Generamos modelo MA(1) con parametro .9 
+MA <- arima.sim(model=list(order = c(0,0,1), ma=0.9),n=200)
+plot(MA)
+```
+
+Viendo estos graficos vemos que no es tan sencillo identificar modelos ARMA. Vimos el modelo  AR y el modelo MA y resultan bastante similares, no pudiendo identificarlos simplemente mirando los datos.
+
+## Identificaciòn ARMA (ACF y PACF)
+
+Las herramientas que se utilizan para identificar los órdenes del modelo son la función de autocorrelación (o ACF) y la función de autocorrelación parcial (o PACF). Si un proceso es AR puro, entonces el ACF se reducirá y el PACF se interrumpirá en el lag p. Para un MA puro, es lo opuesto: el PACF se reduce y el ACF se corta en el lag q. Si ambos están disminuyendo, entonces el modelo es ARMA.
+
+Utilizaremos sarima() del paquete astsa para ajustar fácilmente los modelos a los datos. El comando produce un gráfico de diagnóstico residual que se puede ignorar por el momento (lo veremos mas adelante).
+
+### ACF - PACF - [AR]
+Generamos 100 observaciones en un modelo AR(1)
+
+```{r}
+# Generamos 100 observaciones en un modelo AR(1) 
+ar <- arima.sim(model = list(order = c(1, 0, 0), ar = .9), n = 100) 
+
+# Plot 
+plot(ar)
+```
+Evaluamos ahora el ACF y PACF. Podemos observar el ACF y como se reduce y el PACF que se interrumpe  en el lag p=1.
+
+
+```{r}
+# Dibujamos ACF y PACF 
+plot(acf2(ar))
+```
+
+
+
+```{r}
+# Fit del modelo AR(1) y examinamos la t-table
+
+#ar_fit<-sarima(ar, p=1,d=0,q=0)
+#ar_fit$ttable
+
+```
+### ACF - PACF - [MA]
+
+Hagamos lo mismo pero ahora con un modelo MA. 
+
+```{r}
+# Generamos 100 observaciones en un modelo MA(1) 
+ma <- arima.sim(model = list(order = c(0, 0, 1), ma = -.8), n = 100)
+plot(ma) #plot
+```
+
+Para un MA puro, el PACF se reduce y el ACF se corta en el lag q =1. 
+
+```{r}
+# Dibujamos ACF y PACF 
+plot(acf2(ma))
+```
+
+```{r}
+# Fit modelo MA(1) y t-table
+#ma_fit<-sarima(ma, 0,0,1)
+#ma_fit$ttable
+```
+### ACF - PACF - [ARMA]
+
+Generamos ahora modelos ARMA(2,1)
+
+```{r}
+# Generamos 250 observaciones en un modelo ARMA(2,0,1) 
+x_arma <- arima.sim(model = list(order = c(2, 0, 1), ar = c(1, -.9), ma = .8), n = 250)
+# Plot 
+plot(x_arma)
+```
+
+Observemos ahora el PACF y ACF para un modelo ARMA. Vemos que ambos están disminuyendo, entonces el modelo es ARMA.
+
+```{r}
+# Plot PACF - CFA
+plot(acf2(x_arma))
+```
+
+```{r}
+# Fit modelo ARMA(2,0,1) y t-table
+#x_fit<-sarima(x,2,0,1)
+#x_fit$ttable
+```
+
+
+## Evaluaciòn de un modelo
+
+Para analizar el mejor modelos usaremos dos métricas:El AIC y el BIC así como el análisis de residuos.
+
+### AIC y BIC 
+
+El **criterio de información de Akaike (AIC)** es una medida de la calidad relativa de un modelo estadístico, para un conjunto dado de datos. Como tal, el AIC proporciona un medio para la selección del modelo.
+En estadística, **el criterio de información bayesiano (BIC)** o el más general criterio de Schwarz (SBC también, SBIC) es un criterio para la selección de modelos entre un conjunto finito de modelos.
+
+El AIC tiene un k=2 y el BIC tien un k=log(n)
+
+El objetivo es encontrar el menor BIC o AIC.
+
+### Analisis de los residuos
+
+Si analizamos gráficamente los modelos debemos tener en cuenta
+
+* Los residuos estandarizados deben comportarse como una secuencia de ruido blanco con media cero y una varianza. Examinanmos los gráficos de residuos en busca de desviaciones de este comportamiento.
+
+*El ACF de muestra de los residuos debe verse como el del ruido blanco. Examinamos el ACF en busca de desviaciones de este comportamiento.
+
+*La normalidad es un supuesto esencial al instalar modelos ARMA. Examinamos la gráfica Q-Q para ver si hay desviaciones de la normalidad e identificar valores atípicos.
+
+*Utilizamos la gráfica de estadística Q para ayudar a probar las desviaciones de la blancura de los residuos.
+
+**BIC & AIC + Analisis de residuos - Ejemplo **
+
+Vamos a trabajar sobre la base de datos "varve" de r comenzando con un modelo MA1 e incrementando el orden para entender si el modelo mejora o no.
+
+Esta base "Varve" contiene depósitos sedimentarios de un lugar en Massachusetts durante 634 años, comenzando hace casi 12.000 años.
+
+```{r}
+data("varve") #cargo la base de varve
+?varve #Depósitos sedimentarios de un lugar en Massachusetts durante 634 años, comenzando hace casi 12.000 años.
+
+```
+
+```{r}
+dl_varve <- diff(log(varve)) #aplicamos logaritmo a la base
+```
+
+```{r}
+# Fit MA(1) a dl_varve.   
+MA_fit <- sarima(dl_varve,0,0,1)
+#MA_fit$ttable
+
+# # Fit MA(2) a dl_varve. 
+MA2_fit <- sarima(dl_varve,0,0,2)
+#MA2_fit$ttable
+
+# Fit ARMA(1,1) a dl_varve
+ARMA_fit <- sarima(dl_varve,1,0,1)
+#ARMA_fit$ttable
+```
+Cuando analizamos graficamente los residuos vemos que en el modelo MA1 vemos:
+- Los residuos parecen tener un patròn
+- El ACF parece tener grandes valores en varios Lags
+- El Q-Statics muestra que todos los valores entan por debajo de la linea
+
+Cuando analizamos gráficamente los residuos vemos que en el modelo MA2 vemos una mejora significtiva y posterioremente pasando al modelo ARMA vemos como mejoran aun mas, se reducen los valores del ACF, en el qqplot parecieran alinearse mejor los quantiles a la normalidad y asi tambien cuando analizamos el Q-statics los mismos obtienen un p-value mayor.
+
+Analizaremos ahora el BIC y AIC de cada modelos, donde podemos observar que efectivamente y correspondiendose con lo observado hasta ahora el BIC y AIC mas bajo lo obtenemos con el modelo ARMA(1,1)
+
+
+
+```{r}
+#Calculamos el AIC y BIC para cada uno de los modelos anteriores 
+MA_fit$AIC
+MA_fit$BIC
+MA2_fit$AIC
+MA2_fit$BIC
+ARMA_fit$AIC
+ARMA_fit$BIC
+```
+
+
+# ARIMA
+
+Hasta este momento trabajamos con modelos ARMA, introduciremos ahora el termino "I" por Integrated.
+
+Para que **ARIMA**  funcione al máximo, necesita que los datos estén estacionarios, esto es que la media y la varianza sean constantes en todo el conjunto. En los modelos se la denota con el termino “d”. Entonces, la diferenciación se utiliza para transformar los datos de modo que sean estacionarios. 
+
+Los modelos ARIMA como venimos viendo se definen por los ordenes  (p,d,q). 
+
+Generamos a continuacion un modelo del orden 1,1,0, graficaremos posteriormente el ACF y PACF de los datos generados para ver cómo se comportan los datos integrados. Luego, diferenciaremos los datos para hacerlos estacionarios y comparemos su ACF y PACF.
+
+```{r}
+x <- arima.sim(model = list(order = c(1, 1, 0), ar = .9), n = 200)
+```
+
+```{r}
+# Plot x
+plot(x)
+
+```
+
+```{r}
+
+# Plot de ACF y PACF
+acf2(x)
+```
+
+```{r}
+# Plot DIFF
+plot(diff(x))
+```
+
+```{r}
+# Plot  PACF Y ACF 
+acf2(diff(x))
+
+```
+
+
+Trabajaremos ahora con la base de datos de ASTSA globtemp que contiene desviaciones medias globales de la temperatura terrestre-oceánica, medidas en grados centígrados, para los años 1880-2015.
+
+
+```{r}
+
+?globtemp
+data("globtemp") #cargo la base de datos
+```
+
+Tanto el ACF como el PACF están disminuyendo, lo que implica un modelo ARIMA (1,1,1).
+El ACF se corta en el lag 2 y el PACF se está reduciendo, lo que implica un modelo ARIMA (0,1,2).
+El ACF se está reduciendo y el PACF se corta en el lag 3, lo que implica un modelo ARIMA (3,1,0). Aunque este modelo encaja razonablemente bien, puede ser el peor de los tres  porque utiliza demasiados parámetros para autocorrelaciones tan pequeñas (como se puede ver cuando se analiza el BIC y AIC debajo)
+
+```{r}
+# Plot  PACF y ACF de los datos 
+acf2(diff(globtemp))
+```
+
+```{r}
+
+# Fit modelo ARIMA(1,1,1) 
+ARIMA111_fit<-sarima(globtemp,1,1,1)
+#ARIMA111_fit$ttable
+
+```
+
+```{r}
+
+# Fit aARIMA(0,1,2) 
+ARIMA012_fit<-sarima(globtemp,0,1,2)
+#ARIMA012_fit$ttable
+
+```
+
+
+```{r}
+
+# Fit ARIMA(3,1,0) 
+ARIMA310_fit<-sarima(globtemp,3,1,0)
+#ARIMA012_fit$ttable
+
+```
+
+
+```{r}
+
+ARIMA012_fit$AIC
+ARIMA012_fit$BIC
+
+ARIMA111_fit$AIC
+ARIMA111_fit$BIC
+
+ARIMA310_fit$AIC
+ARIMA310_fit$BIC
+
+
+```
+
+
+```{r}
+```
+
+
+## Forecasting ARIMA
+
+Una vez que se elige un modelo, la proyecciòn es fácil. 
+
+Porque el modelo describe cómo se comporta la dinámica de la serie temporal a lo largo del tiempo. Simplemente continúa la dinámica del modelo en el futuro. En astsa, hay un comando llamado sarima-dot-for que se puede usar para pronosticar. Es similar al comando sarima, pero también especifica el horizonte de pronóstico.
+
+Trabajemos con la base "oil" de la libreria ASTSA. Esta base de datos contiene datos de petróleo crudo, precio al contado del WTI FOB (en dólares por barril), datos semanales desde 2000 hasta mediados de 2010.
+
+```{r}
+data("oil")
+# ?oil
+```
+
+
+Usamos la función window para extraer subconjuntos de las series de tiempo. Para pronosticar los datos otro año, usamos sarima-dot-for y especificamos con qué anticipación deseamos pronosticar. 
+Pronosticamos un avance de 52 semanas. 
+
+sarima.for imprime los pronósticos y sus errores estándar. 
+
+En el gráfico debajo las últimas 100 observaciones están trazadas en negro con puntos y los pronósticos están trazados en rojo. La muestra de color gris oscuro indica más o menos 1 error de predicción del cuadrado medio de la raíz. La muestra de color gris representa el intervalo de confianza del 95%. Además, el grafico incluye los precios reales del petróleo para 2007 (llamado oilf - f para el futuro) para que los valores predichos se puedan comparar con la verdad. 
+
+```{r}
+oil  <- window(astsa::oil, end = 2006) 
+oilf <- window(astsa::oil, end = 2007)
+sarima.for(oil, n.ahead = 52, 1, 1, 1)
+lines(oilf)
+```
+
+
+Hagamos ahora la proyecciòn de la temperatura global (globtemp ya cargada anteriormente) hasta el 2060, 45 años en el futuro. Recordemos que el modelo que hemos armado y que mejor se ajustaba a los datos era ARIMA(0,1,2)
+
+```{r}
+ARIMA012_fit <- sarima(globtemp,0,1,2) # Fit ARIMA(0,1,2) 
+ARIMA012_fit$ttable
+
+```
+
+
+```{r}
+#Hacemos la proyeccion 45 años para adelante desde el termino de la base de datos
+sarima.for(globtemp, n.ahead=45, p=0, d=1, q=2) 
+lines(globtemp) #graficamos
+```
+
+# Seasonal y Mix Models (SARIMA) 
+
+Trabajaremos ahora con modelos estacionales, si recordamos de cuando iniciamos estos videos y el inicio de esta notebook vimos por ejemplo el comportamiento de las ganancias trimestrales de Johnson & Johnson. Donde podiamos ver 1 ciclo  por trimestre.
+
+En los modelos SARIMA, la S es por seasonal.
+
+Las series de tiempo puramente estacionales son raras y, por lo general, tenemos que mezclar la parte estacional con la parte no estacional.
+
+Estos modelos mixtos se denominan SARIMA (p, d, q) x (P, D, Q) _S, las letras minúsculas denotan los órdenes de los componentes no estacionales y las letras mayúsculas se refieren a los componentes estacionales.
+
+
+Trabajaremos sobre los datos de desemplo de EEUU por el periodo 1948-1978, de la libreria astsa que incluye los datos mensuales de desempleo de EE. UU.
+
+Primero graficamos los datos para ver tendencias y persistencias estacionales. Luego observamos los datos sin tendencia, que deberian parecer estacionales.
+
+```{r}
+
+data("unemp") #cargo monthly US unemployment data
+#?unemp
+```
+
+```{r}
+# Plot unemp 
+plot(unemp)
+
+```
+
+```{r}
+# Difference y grafico
+d_unemp <- diff(unemp)
+plot(d_unemp)
+```
+Ahora que hemos eliminado la tendencia y la variación estacional del desempleo, los datos parecen estacionarios.
+
+
+```{r}
+# Seasonally difference d_unemp and plot it
+dd_unemp <- diff(d_unemp, lag = 12)  
+plot(dd_unemp)
+
+```
+
+Ajustamos un modelo SARIMA y observemos la muestra de ACF y PACF de la serie totalmente diferenciada. 
+
+Aclaracion: PACF y ACF esta en terminos anuales  1 año (12 meses), 2 años (24 meses), etc.
+
+Vemos que en el componente no estacional el PACF se corta en el lag 2 y el ACF se reduce. Por otro lado en el componente estacional vemos que el ACF se corta en el lag 12 y el PACF se reduce en los lags 12, 24, 36,
+
+```{r}
+# Plot PACF y ACF con lag 60
+dd_unemp <- diff(diff(unemp), lag = 12)
+acf2(dd_unemp, max.lag = 60)
+
+```
+
+```{r}
+# Fit del modelo
+sarima(unemp, p = 2, d = 1, q = 0, P = 0, D = 1, Q = 1, S = 12)
+
+```
+## Forecasting SARIMA 
+
+Proyectemos ahora el desemplo para los proximos 3 años (36 meses).
+
+```{r}
+sarima.for(unemp, n.ahead=36, p=2,d=1, q=0, P=0, D=1,Q=1,S=12)
+lines(unemp) #graficamos
+
+```
+
+#### Bibliografia
+
+El contenido de esta notebook resulta de una mezcla de distintos lugares, entre otros:
+
+* Libreria astsa (https://github.com/nickpoison/astsa/blob/master/fun_with_astsa/fun_with_astsa.md#arima-simulation)
+* Diversos significados obtenidos de Wikipedia
+* Datacamp - Arima with R
+* https://www.uv.es/ceaces/series/series.htm
+* Data Science in Layman`` Term - Time Series Analysis
+* Time Series Analysis and its application Robert H. Shumway and David S. Sto er
+
+
+
